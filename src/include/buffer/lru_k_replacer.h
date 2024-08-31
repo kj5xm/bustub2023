@@ -26,14 +26,43 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
+public:
+ explicit LRUKNode(const frame_id_t frame_id, const size_t k) : fid_(frame_id), k_(k) {};
+
+ auto RecordAccess (const size_t time_stamp) {
+  history_.push_back(time_stamp);
+  if (history_.size() == k_) {
+   return true;
+  };
+
+  if(history_.size() > k_) {
+   history_.pop_front();
+  };
+
+  return false;
+ };
+
+ [[nodiscard]] auto GetSize() const -> size_t { return history_.size(); }
+
+ void SetEvictable(const bool set_evictable) { is_evictable_ = set_evictable; }
+
+ [[nodiscard]] auto GetEvictable () const -> bool { return is_evictable_; }
+
+ [[nodiscard]] auto GetFrameID() const -> frame_id_t {return fid_; }
+
+ void CleanHistory() {history_.clear();}
+
+ std::shared_ptr<LRUKNode> frontptr_{nullptr};
+ std::shared_ptr<LRUKNode> backptr_{nullptr};
+
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  [[maybe_unused]] std::list<size_t> history_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  std::list<size_t> history_;
+  frame_id_t fid_;
+  size_t k_;
+  bool is_evictable_{false};
 };
 
 /**
@@ -145,17 +174,35 @@ class LRUKReplacer {
    *
    * @return size_t
    */
-  auto Size() -> size_t;
+  [[nodiscard]] auto Size() const -> size_t;
+
+
+ void SetDebug(bool debug_mode) {is_debug_ = debug_mode; };
 
  private:
+
+  void MoveToEnd(std::shared_ptr<LRUKNode> node_ptr, std::shared_ptr<LRUKNode> end_node_ptr);
+
+ void DisLink(std::shared_ptr<LRUKNode> node_ptr);
+
+ [[nodiscard]] auto IsHistoryEmpty() const -> bool;
+
+ [[nodiscard]] auto IsBufferEmpty() const -> bool;
+
+ void DebugPrint() const;
+
   // TODO(student): implement me! You can replace these member variables as you like.
-  // Remove maybe_unused if you start using them.
-  [[maybe_unused]] std::unordered_map<frame_id_t, LRUKNode> node_store_;
-  [[maybe_unused]] size_t current_timestamp_{0};
-  [[maybe_unused]] size_t curr_size_{0};
-  [[maybe_unused]] size_t replacer_size_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] std::mutex latch_;
+  std::shared_ptr<LRUKNode> history_end_ptr_;
+  std::shared_ptr<LRUKNode> middle_separator_ptr_;
+  std::shared_ptr<LRUKNode> buffer_start_ptr_;
+
+  std::unordered_map<frame_id_t, std::shared_ptr<LRUKNode>> node_store_;
+  size_t current_timestamp_{0};
+  size_t curr_size_{0};
+  size_t replacer_size_;
+  size_t k_;
+  std::mutex latch_;
+ bool is_debug_{false};
 };
 
 }  // namespace bustub

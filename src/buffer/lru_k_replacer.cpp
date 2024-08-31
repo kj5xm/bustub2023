@@ -15,16 +15,144 @@
 
 namespace bustub {
 
-LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {}
+LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {
 
-auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool { return false; }
+  history_end_ptr_ = std::make_shared<LRUKNode>(-1,0);
+  middle_separator_ptr_ = std::make_shared<LRUKNode>(-2,0);
+  buffer_start_ptr_ = std::make_shared<LRUKNode>(-3,0);
 
-void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {}
+  history_end_ptr_->frontptr_ = middle_separator_ptr_;
+  middle_separator_ptr_->backptr_ = history_end_ptr_;
+  middle_separator_ptr_->frontptr_ = buffer_start_ptr_;
+  buffer_start_ptr_->backptr_ = middle_separator_ptr_;
+}
 
-void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {}
+auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
+  std::lock_guard<std::mutex> guard(latch_);
+  if (curr_size_ == 0) {
+    return false;
+  }
 
-void LRUKReplacer::Remove(frame_id_t frame_id) {}
+  if (!IsHistoryEmpty()) {
+    for (auto node_ptr = middle_separator_ptr_->backptr_; node_ptr != history_end_ptr_; node_ptr = node_ptr->backptr_) {
+      if (node_ptr->GetEvictable()) {
+        DisLink(node_ptr);
+        *frame_id = node_ptr->GetFrameID();
+        node_ptr->SetEvictable(false);
+        node_ptr->CleanHistory();
+        curr_size_--;
+        if(is_debug_) DebugPrint();
+        return true;
+      }
+    }
+  }
 
-auto LRUKReplacer::Size() -> size_t { return 0; }
+  if (!IsBufferEmpty()) {
+    for (auto node_ptr = buffer_start_ptr_->backptr_; node_ptr != middle_separator_ptr_; node_ptr = node_ptr->backptr_) {
+      if (node_ptr->GetEvictable()) {
+        DisLink(node_ptr);
+        *frame_id = node_ptr->GetFrameID();
+        node_ptr->SetEvictable(false);
+        node_ptr->CleanHistory();
+        curr_size_--;
+        if(is_debug_) DebugPrint();
+        return true;
+      }
+    }
+  }
+
+  if(is_debug_) DebugPrint();
+  return false;
+}
+
+void LRUKReplacer::DisLink(std::shared_ptr<LRUKNode> node_ptr) {
+  //std::lock_guard<std::mutex> guard(latch_);
+
+  auto node_back = node_ptr->backptr_;
+  auto node_front =  node_ptr->frontptr_;
+
+  if (node_back != nullptr) node_back->frontptr_ = node_front;
+  if (node_front != nullptr) node_front->backptr_ = node_back;
+
+  node_ptr->frontptr_ = nullptr;
+  node_ptr->backptr_ = nullptr;
+}
+
+void LRUKReplacer::MoveToEnd(std::shared_ptr<LRUKNode> node_ptr, std::shared_ptr<LRUKNode> end_node_ptr) {
+
+  DisLink(node_ptr);
+  auto end_node_front_ptr = end_node_ptr->frontptr_;
+  end_node_ptr->frontptr_ = node_ptr;
+  if (end_node_front_ptr != nullptr) end_node_front_ptr->backptr_ = node_ptr;
+  node_ptr->frontptr_ = end_node_front_ptr;
+  node_ptr->backptr_ = end_node_ptr;
+}
+
+void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
+  std::lock_guard<std::mutex> guard(latch_);
+  current_timestamp_++;
+  if ( static_cast<size_t>(frame_id) >= replacer_size_) {
+    throw ExecutionException("LRUKReplacer::RecordAccess: The frame_id is larger than the replacer size!");
+  }
+
+  if (node_store_.count(frame_id) == 0) {
+    node_store_[frame_id] =  std::make_shared<LRUKNode>(frame_id, k_);
+    node_store_.at(frame_id)->RecordAccess(current_timestamp_);
+    MoveToEnd(node_store_.at(frame_id), history_end_ptr_);
+    if(is_debug_) DebugPrint();
+    return;
+  }
+
+  if (auto node_ptr = node_store_.at(frame_id); node_ptr->RecordAccess(current_timestamp_)) {
+    MoveToEnd(node_ptr, middle_separator_ptr_);
+  } else {
+    if (node_ptr->GetSize() < k_) {
+      MoveToEnd(node_ptr, history_end_ptr_);
+    } else {
+      MoveToEnd(node_ptr, middle_separator_ptr_);
+    }
+  }
+
+  if(is_debug_) DebugPrint();
+}
+
+void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
+  std::lock_guard<std::mutex> guard(latch_);
+
+  if (node_store_.count(frame_id) != 0 && node_store_.at(frame_id)->GetEvictable() != set_evictable) {
+    node_store_.at(frame_id)->SetEvictable(set_evictable);
+    curr_size_ += set_evictable ? 1 : -1;
+  }
+  if(is_debug_) DebugPrint();
+}
+
+
+void LRUKReplacer::Remove(frame_id_t frame_id) {
+  std::lock_guard<std::mutex> guard(latch_);
+  if (node_store_.count(frame_id) == 0) {
+    throw ExecutionException("LRUKReplacer::Remove: The frame_id does not exist!");
+  }
+  if (!node_store_.at(frame_id)->GetEvictable()) {
+    throw ExecutionException("LRUKReplacer::Remove: The frame_id is not evictable!");
+  }
+  node_store_.erase(frame_id);
+  curr_size_--;
+  if(is_debug_) DebugPrint();
+}
+
+auto LRUKReplacer::Size() const -> size_t { return curr_size_; }
+
+auto LRUKReplacer::IsBufferEmpty() const -> bool { return  middle_separator_ptr_->frontptr_ == buffer_start_ptr_; }
+
+auto LRUKReplacer::IsHistoryEmpty() const -> bool { return  history_end_ptr_->frontptr_ == middle_separator_ptr_; }
+
+void LRUKReplacer::DebugPrint() const {
+  std::cout << "--------------------------------------------------" << std::endl;
+  for (auto node_ptr = history_end_ptr_; node_ptr != nullptr; node_ptr = node_ptr->frontptr_) {
+    std::cout << "node=" << node_ptr->GetFrameID() << ", size=" <<  node_ptr->GetSize() << ", evictable=" <<
+    node_ptr->GetEvictable() << std::endl;
+  }
+}
+
 
 }  // namespace bustub
