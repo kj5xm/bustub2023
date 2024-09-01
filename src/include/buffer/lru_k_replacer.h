@@ -30,14 +30,18 @@ class LRUKNode {
 public:
  explicit LRUKNode(const frame_id_t frame_id, const size_t k) : fid_(frame_id), k_(k) {};
 
+ ~LRUKNode() {
+     history_.clear();
+ };
+
  auto RecordAccess (const size_t time_stamp) {
   history_.push_back(time_stamp);
   if (history_.size() == k_) {
-   return true;
+    return true;
   };
 
   if(history_.size() > k_) {
-   history_.pop_front();
+    history_.pop_front();
   };
 
   return false;
@@ -53,8 +57,8 @@ public:
 
  void CleanHistory() {history_.clear();}
 
- std::shared_ptr<LRUKNode> frontptr_{nullptr};
- std::shared_ptr<LRUKNode> backptr_{nullptr};
+ LRUKNode* frontptr_{nullptr};
+ LRUKNode* backptr_{nullptr};
 
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
@@ -95,7 +99,15 @@ class LRUKReplacer {
    *
    * @brief Destroys the LRUReplacer.
    */
-  ~LRUKReplacer() = default;
+  ~LRUKReplacer() {
+      delete history_end_ptr_;
+      delete middle_separator_ptr_;
+      delete buffer_start_ptr_;
+      for (size_t i = 0; i < replacer_size_; i++) {
+        delete node_store_[i];
+        node_store_.erase(i);
+      }
+  };
 
   /**
    * TODO(P1): Add implementation
@@ -182,9 +194,9 @@ class LRUKReplacer {
 
  private:
 
-  void MoveToEnd(std::shared_ptr<LRUKNode> node_ptr, std::shared_ptr<LRUKNode> end_node_ptr);
+  void MoveToEnd(LRUKNode* node_ptr, LRUKNode* end_node_ptr);
 
- void DisLink(std::shared_ptr<LRUKNode> node_ptr);
+ void DisLink(LRUKNode* node_ptr);
 
  [[nodiscard]] auto IsHistoryEmpty() const -> bool;
 
@@ -193,11 +205,11 @@ class LRUKReplacer {
  void DebugPrint() const;
 
   // TODO(student): implement me! You can replace these member variables as you like.
-  std::shared_ptr<LRUKNode> history_end_ptr_;
-  std::shared_ptr<LRUKNode> middle_separator_ptr_;
-  std::shared_ptr<LRUKNode> buffer_start_ptr_;
+  LRUKNode* history_end_ptr_;
+  LRUKNode* middle_separator_ptr_;
+  LRUKNode* buffer_start_ptr_;
 
-  std::unordered_map<frame_id_t, std::shared_ptr<LRUKNode>> node_store_;
+  std::unordered_map<frame_id_t, LRUKNode*> node_store_;
   size_t current_timestamp_{0};
   size_t curr_size_{0};
   size_t replacer_size_;

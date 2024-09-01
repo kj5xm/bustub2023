@@ -17,14 +17,18 @@ namespace bustub {
 
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {
 
-  history_end_ptr_ = std::make_shared<LRUKNode>(-1,0);
-  middle_separator_ptr_ = std::make_shared<LRUKNode>(-2,0);
-  buffer_start_ptr_ = std::make_shared<LRUKNode>(-3,0);
+  history_end_ptr_ = new LRUKNode(-1,0);
+  middle_separator_ptr_ = new LRUKNode(-2,0);
+  buffer_start_ptr_ = new LRUKNode(-3,0);
 
   history_end_ptr_->frontptr_ = middle_separator_ptr_;
   middle_separator_ptr_->backptr_ = history_end_ptr_;
   middle_separator_ptr_->frontptr_ = buffer_start_ptr_;
   buffer_start_ptr_->backptr_ = middle_separator_ptr_;
+
+  for (size_t i = 0; i < num_frames; i++) {
+    node_store_[static_cast<int>(i)] =  new LRUKNode(static_cast<frame_id_t>(i), k_);
+  }
 }
 
 auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
@@ -65,7 +69,7 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
   return false;
 }
 
-void LRUKReplacer::DisLink(std::shared_ptr<LRUKNode> node_ptr) {
+void LRUKReplacer::DisLink(LRUKNode* node_ptr) {
   //std::lock_guard<std::mutex> guard(latch_);
 
   auto node_back = node_ptr->backptr_;
@@ -78,7 +82,7 @@ void LRUKReplacer::DisLink(std::shared_ptr<LRUKNode> node_ptr) {
   node_ptr->backptr_ = nullptr;
 }
 
-void LRUKReplacer::MoveToEnd(std::shared_ptr<LRUKNode> node_ptr, std::shared_ptr<LRUKNode> end_node_ptr) {
+void LRUKReplacer::MoveToEnd(LRUKNode* node_ptr, LRUKNode* end_node_ptr) {
 
   DisLink(node_ptr);
   auto end_node_front_ptr = end_node_ptr->frontptr_;
@@ -96,7 +100,6 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
   }
 
   if (node_store_.count(frame_id) == 0) {
-    node_store_[frame_id] =  std::make_shared<LRUKNode>(frame_id, k_);
     node_store_.at(frame_id)->RecordAccess(current_timestamp_);
     MoveToEnd(node_store_.at(frame_id), history_end_ptr_);
     if(is_debug_) DebugPrint();
