@@ -88,9 +88,9 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
   Page* fetch_page = nullptr;
 
   //if the page in the buffer pool, return the page
-  if (page_table_.count(page_id)) {
+  if (page_table_.count(page_id) != 0) {
     frame_id = page_table_.at(page_id);
-    return &pages_[static_cast<int>(frame_id)];
+    fetch_page = &pages_[static_cast<int>(frame_id)];
   } else {
     //else 1. create a new page from free_list_ 2. evict a page from replacer_
     if (!free_list_.empty()) {

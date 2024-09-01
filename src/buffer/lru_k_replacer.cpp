@@ -45,7 +45,9 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
         node_ptr->SetEvictable(false);
         node_ptr->CleanHistory();
         curr_size_--;
-        if(is_debug_) DebugPrint();
+        if(is_debug_) {
+          DebugPrint();
+        }
         return true;
       }
     }
@@ -59,13 +61,17 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
         node_ptr->SetEvictable(false);
         node_ptr->CleanHistory();
         curr_size_--;
-        if(is_debug_) DebugPrint();
+        if(is_debug_) {
+          DebugPrint();
+        }
         return true;
       }
     }
   }
 
-  if(is_debug_) DebugPrint();
+  if(is_debug_) {
+    DebugPrint();
+  }
   return false;
 }
 
@@ -75,8 +81,12 @@ void LRUKReplacer::DisLink(LRUKNode* node_ptr) {
   auto node_back = node_ptr->backptr_;
   auto node_front =  node_ptr->frontptr_;
 
-  if (node_back != nullptr) node_back->frontptr_ = node_front;
-  if (node_front != nullptr) node_front->backptr_ = node_back;
+  if (node_back != nullptr) {
+    node_back->frontptr_ = node_front;
+  }
+  if (node_front != nullptr) {
+    node_front->backptr_ = node_back;
+  }
 
   node_ptr->frontptr_ = nullptr;
   node_ptr->backptr_ = nullptr;
@@ -87,7 +97,9 @@ void LRUKReplacer::MoveToEnd(LRUKNode* node_ptr, LRUKNode* end_node_ptr) {
   DisLink(node_ptr);
   auto end_node_front_ptr = end_node_ptr->frontptr_;
   end_node_ptr->frontptr_ = node_ptr;
-  if (end_node_front_ptr != nullptr) end_node_front_ptr->backptr_ = node_ptr;
+  if (end_node_front_ptr != nullptr) {
+    end_node_front_ptr->backptr_ = node_ptr;
+  }
   node_ptr->frontptr_ = end_node_front_ptr;
   node_ptr->backptr_ = end_node_ptr;
 }
@@ -102,7 +114,9 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
   if (node_store_.count(frame_id) == 0) {
     node_store_.at(frame_id)->RecordAccess(current_timestamp_);
     MoveToEnd(node_store_.at(frame_id), history_end_ptr_);
-    if(is_debug_) DebugPrint();
+    if(is_debug_) {
+      DebugPrint();
+    }
     return;
   }
 
@@ -116,7 +130,9 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
     }
   }
 
-  if(is_debug_) DebugPrint();
+  if(is_debug_) {
+    DebugPrint();
+  }
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
@@ -126,7 +142,9 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
     node_store_.at(frame_id)->SetEvictable(set_evictable);
     curr_size_ += set_evictable ? 1 : -1;
   }
-  if(is_debug_) DebugPrint();
+  if(is_debug_) {
+    DebugPrint();
+  }
 }
 
 
@@ -140,7 +158,9 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
   }
   node_store_.erase(frame_id);
   curr_size_--;
-  if(is_debug_) DebugPrint();
+  if(is_debug_) {
+    DebugPrint();
+  }
 }
 
 auto LRUKReplacer::Size() const -> size_t { return curr_size_; }
