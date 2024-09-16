@@ -163,6 +163,7 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
 
   auto node_ptr = it->second;
   DisLink(node_ptr);
+  delete node_ptr;
   node_store_.erase(it);
   
   curr_size_--;
