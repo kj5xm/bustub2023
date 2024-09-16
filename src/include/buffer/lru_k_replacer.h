@@ -100,13 +100,16 @@ class LRUKReplacer {
    * @brief Destroys the LRUReplacer.
    */
   ~LRUKReplacer() {
+      // Delete all LRUKNode objects in node_store_
+      for (auto &pair : node_store_) {
+       delete pair.second;
+      }
+      node_store_.clear();
+
+      // Delete sentinel nodes
       delete history_end_ptr_;
       delete middle_separator_ptr_;
       delete buffer_start_ptr_;
-      for (size_t i = 0; i < replacer_size_; i++) {
-        delete node_store_[i];
-        node_store_.erase(i);
-      }
   };
 
   /**

@@ -22,8 +22,10 @@ LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_fra
   buffer_start_ptr_ = new LRUKNode(-3,0);
 
   history_end_ptr_->frontptr_ = middle_separator_ptr_;
-  middle_separator_ptr_->backptr_ = history_end_ptr_;
+  history_end_ptr_->backptr_ = nullptr;
   middle_separator_ptr_->frontptr_ = buffer_start_ptr_;
+  middle_separator_ptr_->backptr_ = history_end_ptr_;
+  buffer_start_ptr_->frontptr_ = nullptr;
   buffer_start_ptr_->backptr_ = middle_separator_ptr_;
 
   for (size_t i = 0; i < num_frames; i++) {
@@ -111,22 +113,23 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
     throw ExecutionException("LRUKReplacer::RecordAccess: The frame_id is larger than the replacer size!");
   }
 
-  if (node_store_.count(frame_id) == 0) {
-    node_store_.at(frame_id)->RecordAccess(current_timestamp_);
-    MoveToEnd(node_store_.at(frame_id), history_end_ptr_);
-    if(is_debug_) {
-      DebugPrint();
-    }
-    return;
-  }
-
-  if (auto node_ptr = node_store_.at(frame_id); node_ptr->RecordAccess(current_timestamp_)) {
-    MoveToEnd(node_ptr, middle_separator_ptr_);
+  auto it = node_store_.find(frame_id);
+  if (it == node_store_.end()) {
+    // Create a new node if it doesn't exist
+    auto new_node = new LRUKNode(frame_id, k_);
+    node_store_[frame_id] = new_node;
+    new_node->RecordAccess(current_timestamp_);
+    MoveToEnd(new_node, history_end_ptr_);
   } else {
-    if (node_ptr->GetSize() < k_) {
-      MoveToEnd(node_ptr, history_end_ptr_);
-    } else {
+    auto node_ptr = it->second;
+    if (node_ptr->RecordAccess(current_timestamp_)) {
       MoveToEnd(node_ptr, middle_separator_ptr_);
+    } else {
+      if (node_ptr->GetSize() < k_) {
+        MoveToEnd(node_ptr, history_end_ptr_);
+      } else {
+        MoveToEnd(node_ptr, middle_separator_ptr_);
+      }
     }
   }
 
@@ -150,13 +153,18 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 
 void LRUKReplacer::Remove(frame_id_t frame_id) {
   std::lock_guard<std::mutex> guard(latch_);
-  if (node_store_.count(frame_id) == 0) {
-    throw ExecutionException("LRUKReplacer::Remove: The frame_id does not exist!");
+  auto it = node_store_.find(frame_id);
+  if (it == node_store_.end()) {
+    return;
   }
-  if (!node_store_.at(frame_id)->GetEvictable()) {
+  if (!it->second->GetEvictable()) {
     throw ExecutionException("LRUKReplacer::Remove: The frame_id is not evictable!");
   }
-  node_store_.erase(frame_id);
+
+  auto node_ptr = it->second;
+  DisLink(node_ptr);
+  node_store_.erase(it);
+  
   curr_size_--;
   if(is_debug_) {
     DebugPrint();

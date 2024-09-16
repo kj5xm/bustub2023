@@ -36,7 +36,12 @@ BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager
   }
 }
 
-BufferPoolManager::~BufferPoolManager() { delete[] pages_; }
+BufferPoolManager::~BufferPoolManager() {
+  FlushAllPages();
+  delete[] pages_;
+  page_table_.clear();
+  free_list_.clear();
+}
 
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   frame_id_t frame_id;
@@ -51,7 +56,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     replacer_->SetEvictable(frame_id, false);
 
     *page_id = AllocatePage();
-    new_page = &pages_[static_cast<int>(frame_id)];
+    new_page = &pages_[frame_id];
     new_page->page_id_ = *page_id;
     page_table_.emplace(*page_id, frame_id);
   } else if (replacer_->Size() > 0) {
@@ -74,7 +79,7 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
     replacer_->SetEvictable(frame_id, false);
 
     *page_id = AllocatePage();
-    new_page = &pages_[static_cast<int>(frame_id)];
+    new_page = &pages_[frame_id];
     new_page->page_id_ = *page_id;
     page_table_.emplace(*page_id, frame_id);
   }
@@ -99,7 +104,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
 
       auto promise_read = disk_scheduler_->CreatePromise();
       auto future_read = promise_read.get_future();
-      disk_scheduler_->Schedule({false, pages_[static_cast<int>(frame_id)].GetData(), page_id, std::move(promise_read)});
+      disk_scheduler_->Schedule({false, pages_[frame_id].GetData(), page_id, std::move(promise_read)});
 
       if (!future_read.get()) {
         throw ExecutionException("BufferPoolManager::FetchPage: read page error!");
@@ -108,7 +113,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       replacer_->RecordAccess(frame_id);
       replacer_->SetEvictable(frame_id, false);
 
-      fetch_page = &pages_[static_cast<int>(frame_id)];
+      fetch_page = &pages_[frame_id];
       fetch_page->page_id_ = page_id;
       page_table_.emplace(page_id, frame_id);
     } else if (replacer_->Size() > 0){
@@ -136,7 +141,7 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       replacer_->RecordAccess(frame_id);
       replacer_->SetEvictable(frame_id, false);
 
-      fetch_page = &pages_[static_cast<int>(frame_id)];
+      fetch_page = &pages_[frame_id];
       fetch_page->page_id_ = page_id;
       page_table_.emplace(page_id, frame_id);
     }
@@ -152,9 +157,7 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   }
 
   frame_id_t frame_id = page_table_[page_id];
-  if (is_dirty && !pages_[frame_id].is_dirty_) {
-    pages_[frame_id].is_dirty_ = true;
-  }
+  pages_[frame_id].is_dirty_ = pages_[frame_id].is_dirty_ | is_dirty;
 
   if (pages_[frame_id].pin_count_ > 0) {
     pages_[frame_id].pin_count_--;
