@@ -21,11 +21,6 @@ namespace bustub {
 BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager, size_t replacer_k,
                                      LogManager *log_manager)
     : pool_size_(pool_size), disk_scheduler_(std::make_unique<DiskScheduler>(disk_manager)), log_manager_(log_manager) {
-  // TODO(students): remove this line after you have implemented the buffer pool manager
-  //throw NotImplementedException(
-  //    "BufferPoolManager is not implemented yet. If you have finished implementing BPM, please remove the throw "
-  //    "exception line in `buffer_pool_manager.cpp`.");
-
   // we allocate a consecutive memory space for the buffer pool
   pages_ = new Page[pool_size_];
   replacer_ = std::make_unique<LRUKReplacer>(pool_size, replacer_k);
@@ -45,7 +40,7 @@ BufferPoolManager::~BufferPoolManager() {
 
 auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
   frame_id_t frame_id;
-  Page* new_page = nullptr;
+  Page *new_page = nullptr;
   std::scoped_lock scoped_manager_latch(latch_);
 
   if (!free_list_.empty()) {
@@ -65,7 +60,8 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
       page_id_t old_page_id = pages_[frame_id].GetPageId();
       auto promise_write = disk_scheduler_->CreatePromise();
       auto future_write = promise_write.get_future();
-      disk_scheduler_->Schedule({true, pages_[frame_id].GetData(), pages_[frame_id].GetPageId(), std::move(promise_write)});
+      disk_scheduler_->Schedule(
+          {true, pages_[frame_id].GetData(), pages_[frame_id].GetPageId(), std::move(promise_write)});
 
       if (!future_write.get()) {
         throw ExecutionException("BufferPoolManager::NewPage: write page error!");
@@ -89,15 +85,15 @@ auto BufferPoolManager::NewPage(page_id_t *page_id) -> Page * {
 
 auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType access_type) -> Page * {
   std::scoped_lock scoped_manager_latch(latch_);
-  frame_id_t  frame_id;
-  Page* fetch_page = nullptr;
+  frame_id_t frame_id;
+  Page *fetch_page = nullptr;
 
-  //if the page in the buffer pool, return the page
+  // if the page in the buffer pool, return the page
   if (page_table_.count(page_id) != 0) {
     frame_id = page_table_.at(page_id);
     fetch_page = &pages_[static_cast<int>(frame_id)];
   } else {
-    //else 1. create a new page from free_list_ 2. evict a page from replacer_
+    // else 1. create a new page from free_list_ 2. evict a page from replacer_
     if (!free_list_.empty()) {
       frame_id = free_list_.back();
       free_list_.pop_back();
@@ -116,14 +112,15 @@ auto BufferPoolManager::FetchPage(page_id_t page_id, [[maybe_unused]] AccessType
       fetch_page = &pages_[frame_id];
       fetch_page->page_id_ = page_id;
       page_table_.emplace(page_id, frame_id);
-    } else if (replacer_->Size() > 0){
+    } else if (replacer_->Size() > 0) {
       replacer_->Evict(&frame_id);
       page_id_t old_page_id = pages_[frame_id].GetPageId();
       page_table_.erase(page_table_.find(old_page_id));
       if (pages_[frame_id].IsDirty()) {
         auto promise_write = disk_scheduler_->CreatePromise();
         auto future_write = promise_write.get_future();
-        disk_scheduler_->Schedule({true, pages_[frame_id].GetData(), pages_[frame_id].GetPageId(), std::move(promise_write)});
+        disk_scheduler_->Schedule(
+            {true, pages_[frame_id].GetData(), pages_[frame_id].GetPageId(), std::move(promise_write)});
 
         if (!future_write.get()) {
           throw ExecutionException("BufferPoolManager::FetchPage: write page error!");
@@ -157,7 +154,7 @@ auto BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty, [[maybe_unus
   }
 
   frame_id_t frame_id = page_table_[page_id];
-  pages_[frame_id].is_dirty_ = pages_[frame_id].is_dirty_ | is_dirty;
+  pages_[frame_id].is_dirty_ = pages_[frame_id].is_dirty_ || is_dirty;
 
   if (pages_[frame_id].pin_count_ > 0) {
     pages_[frame_id].pin_count_--;

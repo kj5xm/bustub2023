@@ -14,10 +14,10 @@
 
 #include <limits>
 #include <list>
+#include <memory>
 #include <mutex>  // NOLINT
 #include <unordered_map>
 #include <vector>
-#include <memory>
 
 #include "common/config.h"
 #include "common/macros.h"
@@ -27,38 +27,36 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
-public:
- explicit LRUKNode(const frame_id_t frame_id, const size_t k) : fid_(frame_id), k_(k) {};
+ public:
+  explicit LRUKNode(const frame_id_t frame_id, const size_t k) : fid_(frame_id), k_(k){};
 
- ~LRUKNode() {
-     history_.clear();
- };
+  ~LRUKNode() { history_.clear(); };
 
- auto RecordAccess (const size_t time_stamp) {
-  history_.push_back(time_stamp);
-  if (history_.size() == k_) {
-    return true;
+  auto RecordAccess(const size_t time_stamp) {
+    history_.push_back(time_stamp);
+    if (history_.size() == k_) {
+      return true;
+    };
+
+    if (history_.size() > k_) {
+      history_.pop_front();
+    };
+
+    return false;
   };
 
-  if(history_.size() > k_) {
-    history_.pop_front();
-  };
+  [[nodiscard]] auto GetSize() const -> size_t { return history_.size(); }
 
-  return false;
- };
+  void SetEvictable(const bool set_evictable) { is_evictable_ = set_evictable; }
 
- [[nodiscard]] auto GetSize() const -> size_t { return history_.size(); }
+  [[nodiscard]] auto GetEvictable() const -> bool { return is_evictable_; }
 
- void SetEvictable(const bool set_evictable) { is_evictable_ = set_evictable; }
+  [[nodiscard]] auto GetFrameID() const -> frame_id_t { return fid_; }
 
- [[nodiscard]] auto GetEvictable () const -> bool { return is_evictable_; }
+  void CleanHistory() { history_.clear(); }
 
- [[nodiscard]] auto GetFrameID() const -> frame_id_t {return fid_; }
-
- void CleanHistory() {history_.clear();}
-
- LRUKNode* frontptr_{nullptr};
- LRUKNode* backptr_{nullptr};
+  LRUKNode *frontptr_{nullptr};
+  LRUKNode *backptr_{nullptr};
 
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
@@ -100,16 +98,16 @@ class LRUKReplacer {
    * @brief Destroys the LRUReplacer.
    */
   ~LRUKReplacer() {
-      // Delete all LRUKNode objects in node_store_
-      for (auto &pair : node_store_) {
-       delete pair.second;
-      }
-      node_store_.clear();
+    // Delete all LRUKNode objects in node_store_
+    for (auto &pair : node_store_) {
+      delete pair.second;
+    }
+    node_store_.clear();
 
-      // Delete sentinel nodes
-      delete history_end_ptr_;
-      delete middle_separator_ptr_;
-      delete buffer_start_ptr_;
+    // Delete sentinel nodes
+    delete history_end_ptr_;
+    delete middle_separator_ptr_;
+    delete buffer_start_ptr_;
   };
 
   /**
@@ -192,33 +190,30 @@ class LRUKReplacer {
    */
   [[nodiscard]] auto Size() const -> size_t;
 
-
- void SetDebug(bool debug_mode) {is_debug_ = debug_mode; };
+  void SetDebug(bool debug_mode) { is_debug_ = debug_mode; };
 
  private:
+  void MoveToEnd(LRUKNode *node_ptr, LRUKNode *end_node_ptr);
 
-  void MoveToEnd(LRUKNode* node_ptr, LRUKNode* end_node_ptr);
+  void DisLink(LRUKNode *node_ptr);
 
- void DisLink(LRUKNode* node_ptr);
+  [[nodiscard]] auto IsHistoryEmpty() const -> bool;
 
- [[nodiscard]] auto IsHistoryEmpty() const -> bool;
+  [[nodiscard]] auto IsBufferEmpty() const -> bool;
 
- [[nodiscard]] auto IsBufferEmpty() const -> bool;
+  void DebugPrint() const;
 
- void DebugPrint() const;
+  LRUKNode *history_end_ptr_;
+  LRUKNode *middle_separator_ptr_;
+  LRUKNode *buffer_start_ptr_;
 
-  // TODO(student): implement me! You can replace these member variables as you like.
-  LRUKNode* history_end_ptr_;
-  LRUKNode* middle_separator_ptr_;
-  LRUKNode* buffer_start_ptr_;
-
-  std::unordered_map<frame_id_t, LRUKNode*> node_store_;
+  std::unordered_map<frame_id_t, LRUKNode *> node_store_;
   size_t current_timestamp_{0};
   size_t curr_size_{0};
   size_t replacer_size_;
   size_t k_;
   std::mutex latch_;
- bool is_debug_{false};
+  bool is_debug_{false};
 };
 
 }  // namespace bustub
